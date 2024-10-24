@@ -175,8 +175,6 @@ var app = new Vue({
                         <legend>Getting Started? Flash the HiChord firmware!</legend>
                         <div><b-button variant="es" id="blink"  :disabled="no_device">Flash HiChord Firmware!</b-button></div>
                     </b-row>
-                    <!-- Removed the following sections as per your request -->
-                    <!--
                     <hr>
                     <b-row class="p-2">
                         <legend> Or select a platform and a program from the menu below.</legend>
@@ -202,4 +200,170 @@ var app = new Vue({
                                 :state="Boolean(firmwareFile)"
                                 placeholder="Choose or drop a file..."
                                 drop-placeholder="Drop file here..."
-                            ></b-form-
+                            ></b-form-file>
+                    </b-row>
+                </b-container>
+            </b-col>
+        </b-row>
+        <b-row>
+        <b-col align="center" class="app_column">
+        <b-container align="center">
+            <legend>Programming Section</legend>
+            <b-button id="download" variant='es' :disabled="no_device || !sel_example"> Program</b-button>
+
+            <br> <br>
+            <b-button variant="es" v-b-toggle.collapseAdvanced>Advanced...</b-button>
+            <b-collapse id="collapseAdvanced">
+                <br> <div> <b-button variant="es" id="bootloader"  :disabled="no_device">Flash Bootloader Image</b-button> </div>                        
+            </b-collapse>
+
+            <div class="log" id="downloadLog"></div>            
+            <br><br>
+            <div v-if="sel_example||firmwareFile" >            
+                <div v-if="displaySelectedFile">
+                <!--<h3 class="info">Name: {{sel_example.name}}</h3>-->
+                <!--<li>Description: {{sel_example.description}}</li>-->
+                <!--<h3 class="info">File Location: {{sel_example.filepath}} </h3>-->
+                </div>
+            <br>
+            </div>
+            <div><div id = "readme"></div> </div>
+        </b-container>
+        </b-col>
+        </b-row>
+    </b-row>        
+    
+    </b-container>
+    `,
+    data: data,
+    computed: {
+        platformExamples: function () {
+            
+            return this.examples.filter(example => example.platform === this.sel_platform)
+        }
+    },
+    created() {
+        console.log("Page Created")
+    },
+    mounted() {
+        var self = this
+        console.log("Mounted Page")
+        this.importExamples()
+    },
+    methods: {
+        importExamples() {
+            var self = this // assign self to 'this' before nested function calls...
+            var src_url = getRootUrl().split("?")[0].concat("data/sources.json") //need to strip out query string
+            var raw = new XMLHttpRequest();
+            raw.open("GET", src_url, true);
+            raw.responseType = "text"
+            raw.onreadystatechange = function ()
+            {
+                if (this.readyState === 4 && this.status === 200) {
+                    var obj = this.response;
+                    buffer = JSON.parse(obj);
+                    buffer.forEach( function(ex_src) {
+                        // Launch another request with async function to load examples from the 
+                        // specified urls 
+                        // This will fill examples directly, and replace the importExamples/timeout situation.
+                        var ext_raw = new XMLHttpRequest();
+                        ext_raw.open("GET", ex_src.data_url, true);
+                        ext_raw.responseType = "text"
+                        ext_raw.onreadystatechange = function ()
+                        {
+                            // This response will contain example data for the specified source.
+                            if (this.readyState === 4 && this.status === 200) {
+                                var ext_obj = this.response;
+                                ex_buffer = JSON.parse(ext_obj);
+                                const unique_platforms = [...new Set(ex_buffer.map(obj => obj.platform))]
+                                ex_buffer.forEach( function(ex_dat) {
+                                    //  Add "source" to example data
+                                    ex_dat.source = ex_src
+                                    
+                                    self.examples.sort(function (i1, i2){ 
+                                        return i1.name.toLowerCase() < i2.name.toLowerCase() ? -1 : 1
+                                    })
+                                    self.examples.push(ex_dat)
+                                })
+                                unique_platforms.forEach( function(u_plat) {
+                                    if (!self.platforms.includes(u_plat)) {
+                                        self.platforms.push(u_plat)
+                                    }
+                                })
+                            }
+                        }
+                        ext_raw.send(null)
+                    })
+                }
+            }
+            raw.send(null)
+        },
+        programChanged(){
+            var self = this
+
+            // Read new file
+            self.firmwareFileName = self.sel_example.name
+            this.displaySelectedFile = true;
+            var srcurl = self.sel_example.source.repo_url
+            var expath = srcurl.concat(self.sel_example.filepath)
+            readServerFirmwareFile(expath).then(buffer => {
+                firmwareFile = buffer
+            })
+        },
+    },
+    watch: {
+        firmwareFile(newfile){
+            firmwareFile = null;
+            this.displaySelectedFile = true;
+            // Create dummy example struct
+            // This updates sel_example to enable the Program button when a file is loaded
+            var new_example = {
+                name: newfile.name,
+                description: "Imported File",
+                filepath: null,
+                platform: null
+            }
+            this.sel_example = new_example;
+            let reader = new FileReader();
+            reader.onload = function() {
+                this.firmwareFile = reader.result;
+                firmwareFile = reader.result;
+            }
+            reader.readAsArrayBuffer(newfile);
+        },
+        examples(){
+            var self = this
+
+            // Load custom firmware file for the Blink button
+            var customFirmwareUrl = "https://raw.githubusercontent.com/HiChord/HiChordProgrammer/gh-pages/data/hichord_firmware.bin";
+
+            // Read the custom firmware file
+            readServerFirmwareFile(customFirmwareUrl, false).then(buffer => {
+                blinkFirmwareFile = buffer;
+            });
+
+            // (Optional) Load the bootloader firmware file if needed
+            var bootloaderUrl = "https://raw.githubusercontent.com/electro-smith/Programmer/gh-pages/data/dsy_bootloader_v5_4.bin";
+            readServerFirmwareFile(bootloaderUrl, false).then(buffer => {
+                bootloaderFirmwareFile = buffer;
+            });
+
+            // Parse the query strings
+            var searchParams = new URLSearchParams(getRootUrl().split("?")[1])
+            
+            var platform = searchParams.get('platform')
+            var name = searchParams.get('name')
+            if(platform != null && self.examples.filter(ex => ex.platform === platform)){
+                self.sel_platform = platform
+
+                if(name != null){
+                    var ex = self.examples.filter(ex => ex.name === name && ex.platform === platform)[0]
+                    if(ex != null){
+                        self.sel_example = ex
+                        this.programChanged()
+                    }    
+                }
+            }
+        }
+    }
+})
