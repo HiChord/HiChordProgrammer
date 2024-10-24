@@ -175,6 +175,8 @@ var app = new Vue({
                         <legend>Getting Started? Flash the HiChord firmware!</legend>
                         <div><b-button variant="es" id="blink"  :disabled="no_device">Flash HiChord Firmware!</b-button></div>
                     </b-row>
+                    <!-- Removed the following sections as per your request -->
+                    <!--
                     <hr>
                     <b-row class="p-2">
                         <legend> Or select a platform and a program from the menu below.</legend>
@@ -202,6 +204,7 @@ var app = new Vue({
                                 drop-placeholder="Drop file here..."
                             ></b-form-file>
                     </b-row>
+                    -->
                 </b-container>
             </b-col>
         </b-row>
